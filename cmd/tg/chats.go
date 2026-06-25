@@ -30,6 +30,21 @@ type chatList struct {
 	Chats []chatItem `json:"chats"`
 }
 
+const (
+	defaultDialogsLimit = 20
+	maxDialogsBatchSize = 100
+)
+
+func dialogsBatchSize(limit int) int {
+	if limit < 1 {
+		return 1
+	}
+	if limit > maxDialogsBatchSize {
+		return maxDialogsBatchSize
+	}
+	return limit
+}
+
 // MarshalText renders one chat per line.
 func (l chatList) MarshalText(w io.Writer) error {
 	for _, c := range l.Chats {
@@ -69,12 +84,16 @@ func truncate(s string, n int) string {
 // When m is non-nil, the dialogs' peer entities are persisted to the access-hash
 // cache, so peers without a username/phone can later be addressed by "id:<n>".
 func listChats(ctx context.Context, api *tg.Client, m *peerManager, limit int, archived bool) (chatList, error) {
+	if limit <= 0 {
+		return chatList{}, nil
+	}
+
 	folder := 0
 	if archived {
 		folder = 1
 	}
 
-	iter := query.GetDialogs(api).FolderID(folder).Iter()
+	iter := query.GetDialogs(api).FolderID(folder).BatchSize(dialogsBatchSize(limit)).Iter()
 	now := time.Now().Unix()
 
 	var (
@@ -82,10 +101,7 @@ func listChats(ctx context.Context, api *tg.Client, m *peerManager, limit int, a
 		users = map[int64]*tg.User{}
 		chats = map[int64]tg.ChatClass{}
 	)
-	for iter.Next(ctx) {
-		if len(out.Chats) >= limit {
-			break
-		}
+	for len(out.Chats) < limit && iter.Next(ctx) {
 		elem := iter.Value()
 		dlg, ok := elem.Dialog.(*tg.Dialog)
 		if !ok {
@@ -179,7 +195,7 @@ flags and a last-message preview.`,
 	}
 
 	fs := cmd.Flags()
-	fs.IntVarP(&limit, "limit", "n", 100, "maximum number of chats to list")
+	fs.IntVarP(&limit, "limit", "n", defaultDialogsLimit, "maximum number of chats to list")
 	fs.BoolVar(&archived, "archived", false, "list archived chats instead of the main list")
 
 	return cmd

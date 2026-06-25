@@ -19,6 +19,21 @@ func dialogsResult(dialogs []tg.DialogClass, messages []tg.MessageClass, users [
 	}
 }
 
+func dialogPage(n int) ([]tg.DialogClass, []tg.MessageClass, []tg.UserClass) {
+	dialogs := make([]tg.DialogClass, 0, n)
+	messages := make([]tg.MessageClass, 0, n)
+	users := make([]tg.UserClass, 0, n)
+	for i := 0; i < n; i++ {
+		id := int64(i + 1)
+		msgID := i + 1
+		peer := &tg.PeerUser{UserID: id}
+		dialogs = append(dialogs, &tg.Dialog{Peer: peer, TopMessage: msgID})
+		messages = append(messages, &tg.Message{ID: msgID, PeerID: peer, Date: msgID})
+		users = append(users, &tg.User{ID: id})
+	}
+	return dialogs, messages, users
+}
+
 func TestListChats(t *testing.T) {
 	api := newFuncAPI(t, dialogsResult(
 		[]tg.DialogClass{
@@ -73,5 +88,88 @@ func TestListChatsLimit(t *testing.T) {
 	}
 	if len(list.Chats) != 1 {
 		t.Fatalf("limit not respected: got %d", len(list.Chats))
+	}
+}
+
+func TestListChatsUsesLimitAsBatchSize(t *testing.T) {
+	var requestLimits []int
+	api := newFuncAPI(t, func(req bin.Encoder) (bin.Encoder, error) {
+		r, ok := req.(*tg.MessagesGetDialogsRequest)
+		if !ok {
+			return nil, errors.Errorf("unexpected request %T", req)
+		}
+		requestLimits = append(requestLimits, r.Limit)
+		dialogs, messages, users := dialogPage(r.Limit)
+		return &tg.MessagesDialogs{Dialogs: dialogs, Messages: messages, Users: users}, nil
+	})
+
+	list, err := listChats(context.Background(), api, nil, 20, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Chats) != 20 {
+		t.Fatalf("got %d chats, want 20", len(list.Chats))
+	}
+	if len(requestLimits) != 1 || requestLimits[0] != 20 {
+		t.Fatalf("request limits = %v, want [20]", requestLimits)
+	}
+}
+
+func TestListChatsCapsBatchSize(t *testing.T) {
+	var requestLimits []int
+	api := newFuncAPI(t, func(req bin.Encoder) (bin.Encoder, error) {
+		r, ok := req.(*tg.MessagesGetDialogsRequest)
+		if !ok {
+			return nil, errors.Errorf("unexpected request %T", req)
+		}
+		requestLimits = append(requestLimits, r.Limit)
+		dialogs, messages, users := dialogPage(r.Limit)
+		return &tg.MessagesDialogsSlice{
+			Dialogs:  dialogs,
+			Messages: messages,
+			Users:    users,
+			Count:    250,
+		}, nil
+	})
+
+	list, err := listChats(context.Background(), api, nil, 250, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Chats) != 250 {
+		t.Fatalf("got %d chats, want 250", len(list.Chats))
+	}
+	if len(requestLimits) != 3 {
+		t.Fatalf("request limits = %v, want 3 capped requests", requestLimits)
+	}
+	for _, got := range requestLimits {
+		if got != maxDialogsBatchSize {
+			t.Fatalf("request limits = %v, want capped at %d", requestLimits, maxDialogsBatchSize)
+		}
+	}
+}
+
+func TestListChatsZeroLimitDoesNotQuery(t *testing.T) {
+	api := newFuncAPI(t, func(req bin.Encoder) (bin.Encoder, error) {
+		return nil, errors.Errorf("unexpected request %T", req)
+	})
+
+	list, err := listChats(context.Background(), api, nil, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Chats) != 0 {
+		t.Fatalf("got %d chats, want 0", len(list.Chats))
+	}
+}
+
+func TestChatsListDefaultLimit(t *testing.T) {
+	cmd := (&app{}).newChatsListCmd()
+	flag := cmd.Flags().Lookup("limit")
+	if flag == nil {
+		t.Fatal("limit flag not found")
+	}
+	if flag.DefValue != "20" {
+		t.Fatalf("default limit = %q, want 20", flag.DefValue)
 	}
 }
