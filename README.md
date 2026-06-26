@@ -9,23 +9,22 @@ Built on [`gotd/td`](https://github.com/gotd/td).
 
 ## Installation
 
-Download a prebuilt binary or package (`.deb`/`.rpm`/`.apk`) for your platform from
-the [latest release](https://github.com/gotd/cli/releases/latest).
+Download a prebuilt macOS binary for your platform from the
+[latest release](https://github.com/zamai/telegram-cli/releases/latest).
 
 ## Quick start
 
 ```console
-$ tg init                                          # write config (release binaries embed app credentials)
+$ tg init --app-id APP_ID --app-hash APP_HASH      # write config with your app credentials
 $ tg login                                         # QR login — scan once from a logged-in device
 $ tg whoami                                         # confirm you're authenticated
 $ tg send "Hello world"                             # message yourself (Saved Messages)
 $ tg send --peer @gotd_test "Hello world"           # message a peer
 ```
 
-App credentials are required. The prebuilt [release](https://github.com/gotd/cli/releases/latest)
-binaries embed them at build time and present the session as a desktop client, so
-`tg init` just works. If you build from source, provide your own from
-<https://my.telegram.org>: `tg init --app-id APP_ID --app-hash APP_HASH`.
+App credentials are required. Create your own at <https://my.telegram.org>, then
+provide them with `tg init --app-id APP_ID --app-hash APP_HASH` or the
+`APP_ID`/`APP_HASH` environment variables.
 
 The config is written to the `gotd` subdirectory of your config dir, e.g.
 `~/.config/gotd/gotd.cli.yaml`. The session persists there too, so subsequent
@@ -39,8 +38,9 @@ $ tg login --phone +1234567890  # phone-code login (use --phone= to be prompted 
 $ TG_PASSWORD=secret tg login   # supply the 2FA cloud password non-interactively
 ```
 
-Bot login still works too: provide a token via `tg init --token <bot-token>` and pass
-`--bot` to commands that support it (e.g. `tg whoami --bot`).
+Bot login still works too: provide a token via
+`tg init --app-id APP_ID --app-hash APP_HASH --token <bot-token>` and pass `--bot`
+to commands that support it (e.g. `tg whoami --bot`).
 
 ## Agent-friendly by design
 
@@ -120,7 +120,7 @@ number. Test mode only switches the DC list — it uses the same app credentials
 production (so the same app-id/app-hash requirement applies):
 
 ```console
-$ tg init --test                # persists test: true
+$ tg init --app-id APP_ID --app-hash APP_HASH --test
 $ tg login --phone 9996621234   # test number for DC 2; the code is 22222
 $ tg whoami
 ```

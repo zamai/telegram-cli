@@ -22,13 +22,14 @@ tg whoami -o json   # authenticated → {"schema":1,"data":{...}}; else errors
 If it errors with "no config … run `tg init` first" or a not-authorized error:
 
 ```bash
-tg init             # writes ~/.config/gotd/gotd.cli.yaml (release binaries embed app creds)
+tg init --app-id … --app-hash …  # writes ~/.config/gotd/gotd.cli.yaml
 tg login            # QR by default: the USER scans from Settings → Devices
 ```
 
-Release binaries embed app credentials; source builds need them supplied
-(`tg init --app-id … --app-hash …`, from https://my.telegram.org). If `tg init`
-errors with "no app credentials", that's the cause — ask the user.
+App credentials are not embedded in release binaries. The user must create their
+own at https://my.telegram.org and provide them with `tg init --app-id …
+--app-hash …` or `APP_ID`/`APP_HASH`. If `tg init` errors with "app credentials
+required", that's the cause — ask the user.
 
 Do not run `tg login` autonomously expecting it to succeed headless — QR/phone
 login needs the user. `tg init` is safe to run yourself.
@@ -97,19 +98,18 @@ tg delete-history @x --yes
 ```bash
 tg accounts                          # list configured accounts + auth status
 tg accounts add work --app-id … --app-hash …
-tg login --account work              # or: tg login --account <new-label> (auto-created)
+tg login --account work
 tg chats list --account work -o json
 tg watch --account all -o json       # fan out across all accounts, labeled
 ```
 
-`tg login --account <label>` creates the account entry on the fly (reusing the
-build-time app credentials), so `tg accounts add` is only needed for custom app
-credentials, a bot token, or a per-account proxy.
+Run `tg accounts add <label> --app-id … --app-hash …` before logging in to a
+new named account.
 
 ## Bots
 
 ```bash
-tg init --token <bot-token>
+tg init --app-id … --app-hash … --token <bot-token>
 tg whoami --bot
 # pass --bot to commands that support a bot session
 ```

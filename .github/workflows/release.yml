@@ -40,11 +40,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional built-in app credentials injected into the binaries via
-          # -ldflags when the repository secrets are present. Without them,
-          # users provide credentials with `tg init --app-id --app-hash`.
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_HASH: ${{ secrets.APP_HASH }}
 
       - name: Upload assets
         uses: actions/upload-artifact@v7.0.1

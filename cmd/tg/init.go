@@ -30,15 +30,11 @@ func newInitCmd(a *app) *cobra.Command {
 		GroupID: groupAuth,
 		Long: `Create the config file at the path given by the global --config flag.
 
-App credentials are required. Release binaries embed them at build time, so you
-can run "tg init" then "tg login" right away. When building from source, pass your
-own --app-id/--app-hash from https://my.telegram.org (or set APP_ID/APP_HASH env).
+App credentials are required. Pass your own --app-id/--app-hash from
+https://my.telegram.org (or set APP_ID/APP_HASH env) before running "tg login".
 A bot token is optional — most commands use a personal user session created with
 "tg login". BOT_TOKEN is also read from the env.`,
-		Example: `  # Release binary (embeds credentials), then run: tg login
-  tg init
-
-  # Your own app credentials (required for source builds)
+		Example: `  # Your own app credentials, then run: tg login
   tg init --app-id 10 --app-hash abcd
 
   # With an optional bot token
@@ -47,6 +43,9 @@ A bot token is optional — most commands use a personal user session created wi
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if a.configPath == "" {
 				return errors.New("no config path provided")
+			}
+			if err := requireAppCredentials(appID, appHash); err != nil {
+				return err
 			}
 
 			cfg := Config{
@@ -66,8 +65,8 @@ A bot token is optional — most commands use a personal user session created wi
 	}
 
 	fs := cmd.Flags()
-	fs.IntVar(&appID, "app-id", envInt("APP_ID"), "telegram app ID (default: built-in)")
-	fs.StringVar(&appHash, "app-hash", os.Getenv("APP_HASH"), "telegram app hash (default: built-in)")
+	fs.IntVar(&appID, "app-id", envInt("APP_ID"), "telegram app ID")
+	fs.StringVar(&appHash, "app-hash", os.Getenv("APP_HASH"), "telegram app hash")
 	fs.StringVar(&token, "token", os.Getenv("BOT_TOKEN"), "optional telegram bot token")
 	fs.StringVar(&proxy, "proxy", os.Getenv("TG_PROXY"), "optional proxy URL (socks5://, tg://proxy?...)")
 	fs.BoolVar(&test, "test", false, "create the account against the telegram test server")

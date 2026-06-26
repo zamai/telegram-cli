@@ -13,13 +13,8 @@ builds:
       - amd64
       - arm64
     main: ./cmd/tg
-    # Inject built-in app credentials from APP_ID/APP_HASH when present.
-    # Fork releases can publish without secrets; credentials must then be
-    # configured per account.
     ldflags:
       - -s -w
-      - -X main.builtinAppID={{ envOrDefault "APP_ID" "" }}
-      - -X main.builtinAppHash={{ envOrDefault "APP_HASH" "" }}
 checksum:
   name_template: 'checksums.txt'
 snapshot:

@@ -41,8 +41,8 @@ go mod tidy                          # CI fails if this produces a diff
 ```
 
 Go 1.25. Releases are cut by pushing a `v*` tag, which triggers GoReleaser
-(`.github/workflows/release.yml`); the release build embeds app credentials via `-ldflags` and
-fails if the `APP_ID`/`APP_HASH` secrets are missing.
+(`.github/workflows/release.yml`). Release builds do not embed Telegram app credentials;
+users provide their own with `tg init --app-id --app-hash` or `APP_ID`/`APP_HASH`.
 
 Commits must follow Conventional Commits (`feat(...)`, `ci:`, `fix:`, …) — enforced by
 `.github/workflows/commitlint.yml`.
