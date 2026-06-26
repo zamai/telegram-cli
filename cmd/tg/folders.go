@@ -142,11 +142,11 @@ func (a *app) modifyFolderChat(use, short string, add bool) *cobra.Command {
 				return errors.Wrap(err, "folder-id must be an integer")
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[1])
+				peer, err := targets.Input(ctx, args[1])
 				if err != nil {
 					return err
 				}

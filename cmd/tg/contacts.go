@@ -182,11 +182,11 @@ func (a *app) newContactsDeleteCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				p, err := m.Resolve(ctx, args[0])
+				p, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
@@ -219,11 +219,11 @@ func (a *app) blockCmd(use, short string, unblock bool) *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				p, err := resolvePeer(ctx, m, args[0])
+				p, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

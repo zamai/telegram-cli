@@ -2,6 +2,7 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -64,5 +65,36 @@ func TestPrinterTextUsesMarshaler(t *testing.T) {
 	}
 	if got := buf.String(); got != "name=durov" {
 		t.Errorf("text = %q, want %q", got, "name=durov")
+	}
+}
+
+func TestPrinterJSONLineAddsAccountToObject(t *testing.T) {
+	var buf bytes.Buffer
+	if err := New(JSON, &buf).EmitLine("work", sample{Name: "durov"}); err != nil {
+		t.Fatal(err)
+	}
+
+	var got map[string]string
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("json line: %v", err)
+	}
+	if got["account"] != "work" {
+		t.Errorf("account = %q, want work", got["account"])
+	}
+	if got["name"] != "durov" {
+		t.Errorf("name = %q, want durov", got["name"])
+	}
+	if strings.Count(buf.String(), "\n") != 1 {
+		t.Errorf("stream output should be one line, got %q", buf.String())
+	}
+}
+
+func TestPrinterTextLinePrefixesAccount(t *testing.T) {
+	var buf bytes.Buffer
+	if err := New(Text, &buf).EmitLine("work", sample{Name: "durov"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "[work] name=durov\n" {
+		t.Errorf("line = %q, want %q", got, "[work] name=durov\n")
 	}
 }

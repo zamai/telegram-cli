@@ -139,3 +139,40 @@ func TestBuilderForSelf(t *testing.T) {
 		}
 	}
 }
+
+func TestCachedPeersInputSelf(t *testing.T) {
+	api, _ := newTestAPI(t)
+	targets := newCachedPeers(api, newTestManager(t))
+
+	for _, in := range selfAliases {
+		p, err := targets.Input(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Input(%q): %v", in, err)
+		}
+		if _, ok := p.(*tg.InputPeerSelf); !ok {
+			t.Errorf("Input(%q) = %T, want InputPeerSelf", in, p)
+		}
+	}
+}
+
+func TestCachedPeersBuilderForID(t *testing.T) {
+	ctx := context.Background()
+	store, err := peercache.Open(filepath.Join(t.TempDir(), "peers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, peers.Key{Prefix: "users_", ID: 42}, peers.Value{AccessHash: 999}); err != nil {
+		t.Fatal(err)
+	}
+
+	api, mock := newTestAPI(t)
+	mock.Expect().ThenResult(&tg.UserClassVector{Elems: []tg.UserClass{
+		&tg.User{ID: 42, AccessHash: 999, Username: "durov"},
+	}})
+	m := &peerManager{Manager: peers.Options{Storage: store}.Build(api), store: store}
+	targets := newCachedPeers(api, m)
+
+	if _, err := targets.Builder(ctx, "id:42"); err != nil {
+		t.Fatalf("Builder(id:42): %v", err)
+	}
+}

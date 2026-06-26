@@ -75,6 +75,8 @@ func (e watchEvent) MarshalText(w io.Writer) error {
 	line := e.Peer.label()
 	if e.Message.Text != "" {
 		line += ": " + e.Message.Text
+	} else if e.Message.Media != "" {
+		line += ": [" + e.Message.Media + "]"
 	}
 	_, err := w.Write([]byte(line + "\n"))
 	return err

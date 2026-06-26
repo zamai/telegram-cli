@@ -76,11 +76,11 @@ func (a *app) participantsCmd(use, short, filter string) *cobra.Command {
 				f = filterFlag
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				channel, err := asInputChannel(ctx, m, args[0])
+				channel, err := targets.Channel(ctx, args[0])
 				if err != nil {
 					return err
 				}

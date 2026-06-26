@@ -2,22 +2,17 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/go-faster/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/gotd/contrib/middleware/floodwait"
-	"github.com/gotd/log/logzap"
-	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
 
 	"github.com/gotd/cli/internal/output"
-	"github.com/gotd/cli/internal/pretty"
-	"github.com/gotd/cli/internal/proxy"
 )
 
 // errNotAuthorized is returned when a user-session command runs without a
@@ -115,48 +110,18 @@ func (a *app) before(cmd *cobra.Command) error {
 
 // selectedLabels returns the account labels the command should run against.
 func (a *app) selectedLabels() ([]string, error) {
-	if a.accountFlag == "all" {
-		labels := a.cfg.labels()
-		if len(labels) == 0 {
-			return nil, errors.New("no configured accounts")
-		}
-		return labels, nil
-	}
-	label := a.accountFlag
-	if label == "" {
-		// No --account / TG_ACCOUNT: use the configured default account.
-		label = a.cfg.resolvedDefault()
-	}
-	return []string{label}, nil
+	return a.runtime().selectedLabels()
 }
 
 // activate resolves and installs the active account state for label. When multi
 // is set, the account label is included in output.
 func (a *app) activate(label string, multi bool) error {
-	st, err := a.accountState(label)
-	if err != nil {
-		return err
-	}
-	a.active = st
-	if multi {
-		a.printer.SetAccount(label)
-	}
-	return nil
+	return a.runtime().activate(label, multi)
 }
 
 // ensureActive activates a single selected account if none is active yet.
 func (a *app) ensureActive() error {
-	if a.active != nil {
-		return nil
-	}
-	labels, err := a.selectedLabels()
-	if err != nil {
-		return err
-	}
-	if len(labels) != 1 {
-		return errors.New("this command needs a single --account (not 'all')")
-	}
-	return a.activate(labels[0], false)
+	return a.runtime().ensureActive()
 }
 
 // skipConfig reports whether the command runs without a loaded config/session.
@@ -183,30 +148,7 @@ type runParams struct {
 
 // optionsFor builds telegram.Options for a specific account state.
 func (a *app) optionsFor(st *accountState, rp runParams, d tg.UpdateDispatcher) telegram.Options {
-	mw := []telegram.Middleware{a.waiter}
-	if a.debug {
-		mw = append(mw, pretty.Middleware())
-	}
-
-	opts := telegram.Options{
-		Logger:      logzap.New(a.log.Named("tg")),
-		Device:      deviceConfig(),
-		Middlewares: mw,
-		SessionStorage: &session.FileStorage{
-			Path: st.acc.sessionPath(filepath.Dir(a.configPath), st.label, rp.auth.String()),
-		},
-	}
-	if rp.updates {
-		opts.UpdateHandler = d
-	} else {
-		opts.NoUpdates = true
-	}
-	// Test server: the global --test flag or the account's persisted setting.
-	if st.acc.Test {
-		opts.DCList = dcs.Test()
-	}
-	opts.Resolver = st.resolver
-	return opts
+	return a.runtime().optionsFor(st, rp, d)
 }
 
 // connectWith builds a client for the given account state and runs f inside the
@@ -218,25 +160,7 @@ func (a *app) connectWith(
 	rp runParams,
 	f func(ctx context.Context, client *telegram.Client, d tg.UpdateDispatcher) error,
 ) error {
-	var d tg.UpdateDispatcher
-	if rp.updates {
-		d = tg.NewUpdateDispatcher()
-	}
-
-	appID, appHash, err := effectiveCreds(st.acc)
-	if err != nil {
-		return err
-	}
-	client := telegram.NewClient(appID, appHash, a.optionsFor(st, rp, d))
-
-	if err := a.waiter.Run(ctx, func(ctx context.Context) error {
-		return client.Run(ctx, func(ctx context.Context) error {
-			return f(ctx, client, d)
-		})
-	}); err != nil && !errors.Is(err, context.Canceled) {
-		return err
-	}
-	return nil
+	return a.runtime().connectWith(ctx, st, rp, f)
 }
 
 // connect builds a client for the active account and runs f. It activates a
@@ -246,33 +170,13 @@ func (a *app) connect(
 	rp runParams,
 	f func(ctx context.Context, client *telegram.Client, d tg.UpdateDispatcher) error,
 ) error {
-	if err := a.ensureActive(); err != nil {
-		return err
-	}
-	return a.connectWith(ctx, a.active, rp, f)
+	return a.runtime().connect(ctx, rp, f)
 }
 
 // accountState resolves an account label into runtime state (without mutating
 // the shared active state), for concurrent multi-account use.
 func (a *app) accountState(label string) (*accountState, error) {
-	acc, err := a.cfg.account(label)
-	if err != nil {
-		return nil, err
-	}
-	proxyURL := a.proxyURL
-	if proxyURL == "" {
-		proxyURL = acc.Proxy
-	}
-	resolver, err := proxy.Resolver(proxyURL)
-	if err != nil {
-		return nil, err
-	}
-	if resolver == nil {
-		// No proxy: connect like Telegram Desktop (Obfuscated2 + abridged
-		// transport) instead of gotd's plain default.
-		resolver = telegram.TDesktopResolver()
-	}
-	return &accountState{label: label, acc: acc, resolver: resolver}, nil
+	return a.runtime().accountState(label)
 }
 
 // run connects, ensures the session is authorized, and calls f with the API
@@ -285,25 +189,7 @@ func (a *app) run(
 	rp runParams,
 	f func(ctx context.Context, api *tg.Client) error,
 ) error {
-	labels, err := a.selectedLabels()
-	if err != nil {
-		return err
-	}
-	multi := len(labels) > 1
-
-	for _, label := range labels {
-		a.active = nil
-		if err := a.activate(label, multi); err != nil {
-			return err
-		}
-		if err := a.runOne(ctx, rp, f); err != nil {
-			if multi {
-				return errors.Wrapf(err, "account %q", label)
-			}
-			return err
-		}
-	}
-	return nil
+	return a.runtime().run(ctx, rp, f)
 }
 
 // runOne authorizes and runs f against the active account.
@@ -312,28 +198,5 @@ func (a *app) runOne(
 	rp runParams,
 	f func(ctx context.Context, api *tg.Client) error,
 ) error {
-	return a.connect(ctx, rp, func(ctx context.Context, client *telegram.Client, d tg.UpdateDispatcher) error {
-		status, err := client.Auth().Status(ctx)
-		if err != nil {
-			return errors.Wrap(err, "auth status")
-		}
-		if !status.Authorized {
-			switch {
-			case rp.authorize != nil:
-				if err := rp.authorize(ctx, client, d); err != nil {
-					return err
-				}
-			case rp.auth == authBot:
-				if a.active.acc.BotToken == "" {
-					return errors.New("no bot_token in config")
-				}
-				if _, err := client.Auth().Bot(ctx, a.active.acc.BotToken); err != nil {
-					return errors.Wrap(err, "bot auth")
-				}
-			default:
-				return errNotAuthorized
-			}
-		}
-		return f(ctx, client.API())
-	})
+	return a.runtime().runOne(ctx, rp, f)
 }

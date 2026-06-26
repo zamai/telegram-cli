@@ -252,13 +252,13 @@ The document type is detected from the file's MIME type unless --type is set.`,
 				upld := uploader.NewUploader(api).
 					WithThreads(uf.threads).
 					WithPartSize(uploader.MaximumPartSize)
-				sender, m, err := a.sender(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				sender = sender.WithUploader(upld)
+				targets = targets.WithSender(targets.Sender().WithUploader(upld))
 
-				builder, err := builderFor(ctx, m, sender, uf.peer)
+				builder, err := targets.Builder(ctx, uf.peer)
 				if err != nil {
 					return err
 				}

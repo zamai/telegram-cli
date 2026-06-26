@@ -8,7 +8,6 @@ import (
 	"github.com/go-faster/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/tg"
 )
 
@@ -22,28 +21,6 @@ type noLinkResult struct {
 func (r noLinkResult) MarshalText(w io.Writer) error {
 	_, err := fmt.Fprintln(w, "no invite link; generate one with `tg invite-link new <peer>`")
 	return err
-}
-
-// currentInviteLink returns the chat's primary (permanent) invite link, or the
-// empty string if none has been generated yet. It works for both basic groups
-// and channels/supergroups.
-func currentInviteLink(ctx context.Context, api *tg.Client, p peers.Peer) (string, error) {
-	var (
-		full *tg.MessagesChatFull
-		err  error
-	)
-	switch v := p.(type) {
-	case peers.Channel:
-		full, err = api.ChannelsGetFullChannel(ctx, v.InputChannel())
-	case peers.Chat:
-		full, err = api.MessagesGetFullChat(ctx, v.ID())
-	default:
-		return "", errors.New("peer is not a group or channel")
-	}
-	if err != nil {
-		return "", errors.Wrap(err, "get full chat")
-	}
-	return inviteLinkFromFull(full)
 }
 
 // inviteLinkFromFull extracts the primary invite link from a full-chat
@@ -82,15 +59,15 @@ If the chat has no invite link yet, use ` + "`tg invite-link new`" + ` to create
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				p, err := resolvePeerArg(ctx, m, args[0])
+				p, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
-				link, err := currentInviteLink(ctx, api, p)
+				link, err := newChatAdmin(api).CurrentInviteLink(ctx, p)
 				if err != nil {
 					return err
 				}
@@ -121,11 +98,11 @@ Each call creates an additional link; the chat's primary link is unchanged.`,
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

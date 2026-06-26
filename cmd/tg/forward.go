@@ -33,19 +33,15 @@ Peers are me/self, @username, phone, or a t.me link.`,
 			}
 
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				fromPeer, err := resolvePeer(ctx, m, from)
+				fromPeer, err := targets.Input(ctx, from)
 				if err != nil {
 					return err
 				}
-				sender, _, err := a.sender(api)
-				if err != nil {
-					return err
-				}
-				bf, err := builderFor(ctx, m, sender, args[0])
+				bf, err := targets.Builder(ctx, args[0])
 				if err != nil {
 					return err
 				}

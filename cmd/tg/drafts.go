@@ -90,11 +90,11 @@ func (a *app) newDraftSetCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}
@@ -116,11 +116,11 @@ func (a *app) newDraftClearCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

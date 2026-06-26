@@ -43,11 +43,11 @@ func (a *app) newScheduleSendCmd() *cobra.Command {
 				return err
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				sender, m, err := a.sender(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				bf, err := builderFor(ctx, m, sender, args[0])
+				bf, err := targets.Builder(ctx, args[0])
 				if err != nil {
 					return err
 				}
@@ -93,11 +93,11 @@ func (a *app) newScheduleListCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}
@@ -105,11 +105,11 @@ func (a *app) newScheduleListCmd() *cobra.Command {
 				if err != nil {
 					return errors.Wrap(err, "messages.getScheduledHistory")
 				}
-				msgs, ent, err := messagesFrom(res)
+				out, err := newMessageTimeline().FromResponse(res)
 				if err != nil {
 					return err
 				}
-				return a.printer.Emit(messagesToHistory(msgs, ent))
+				return a.printer.Emit(out)
 			})
 		},
 	}
@@ -128,11 +128,11 @@ func (a *app) newScheduleDeleteCmd() *cobra.Command {
 				return err
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

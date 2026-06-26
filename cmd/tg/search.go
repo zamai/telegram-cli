@@ -6,25 +6,8 @@ import (
 	"github.com/go-faster/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/tg"
 )
-
-// messagesToHistory maps raw messages + entities into a historyResult.
-func messagesToHistory(msgs []tg.MessageClass, ent peer.Entities) historyResult {
-	var out historyResult
-	for _, mc := range msgs {
-		msg, ok := mc.(*tg.Message)
-		if !ok {
-			continue
-		}
-		if out.Peer.Type == "" {
-			out.Peer = describePeer(msg.PeerID, ent)
-		}
-		out.Messages = append(out.Messages, buildMessageItem(msg, ent))
-	}
-	return out
-}
 
 // searchMessages searches a single peer's messages (one page).
 func searchMessages(
@@ -47,11 +30,7 @@ func searchMessages(
 	if err != nil {
 		return historyResult{}, errors.Wrap(err, "messages.search")
 	}
-	msgs, ent, err := messagesFrom(res)
-	if err != nil {
-		return historyResult{}, err
-	}
-	return messagesToHistory(msgs, ent), nil
+	return newMessageTimeline().FromResponse(res)
 }
 
 // searchGlobal searches messages across all chats (one page).
@@ -65,11 +44,7 @@ func searchGlobal(ctx context.Context, api *tg.Client, q string, limit int) (his
 	if err != nil {
 		return historyResult{}, errors.Wrap(err, "messages.searchGlobal")
 	}
-	msgs, ent, err := messagesFrom(res)
-	if err != nil {
-		return historyResult{}, err
-	}
-	return messagesToHistory(msgs, ent), nil
+	return newMessageTimeline().FromResponse(res)
 }
 
 func (a *app) newSearchCmd() *cobra.Command {
@@ -99,11 +74,11 @@ the peer is omitted and the query is run across all chats.`,
 				if len(args) != 2 {
 					return errors.New("usage: tg search <peer> <query> (or --global <query>)")
 				}
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

@@ -64,3 +64,34 @@ func TestListHistoryLimit(t *testing.T) {
 		t.Fatalf("limit not respected: got %d", len(res.Messages))
 	}
 }
+
+func TestMessageTimelineFromMessages(t *testing.T) {
+	timeline := newMessageTimeline()
+	msg := &tg.Message{
+		ID:      7,
+		PeerID:  &tg.PeerUser{UserID: 5},
+		Message: "hello",
+		Date:    70,
+	}
+	msg.SetFromID(&tg.PeerUser{UserID: 5})
+	res := timeline.FromMessages(
+		[]tg.MessageClass{
+			msg,
+			&tg.MessageEmpty{},
+		},
+		entitiesOf([]tg.UserClass{&tg.User{ID: 5, Username: "alice", FirstName: "Alice"}}, nil),
+	)
+
+	if res.Peer.Username != "alice" {
+		t.Fatalf("peer = %+v", res.Peer)
+	}
+	if len(res.Messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(res.Messages))
+	}
+	if res.Messages[0].From == nil || res.Messages[0].From.Username != "alice" {
+		t.Fatalf("from = %+v", res.Messages[0].From)
+	}
+	if res.Messages[0].Text != "hello" {
+		t.Fatalf("text = %q", res.Messages[0].Text)
+	}
+}

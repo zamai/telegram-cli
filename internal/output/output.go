@@ -7,6 +7,7 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -97,4 +98,69 @@ func (p *Printer) Emit(v any) error {
 		return errors.Wrap(err, "write text")
 	}
 	return nil
+}
+
+// EmitLine writes a single stream event as one line. JSON mode keeps the event
+// fields at the top level and adds account when provided; text mode renders the
+// event through TextMarshaler and prefixes the account on the same line.
+func (p *Printer) EmitLine(account string, v any) error {
+	if p.format == JSON {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return errors.Wrap(err, "encode json line")
+		}
+		if account != "" {
+			b, err = addAccountField(b, account)
+			if err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintln(p.w, string(b)); err != nil {
+			return errors.Wrap(err, "write json line")
+		}
+		return nil
+	}
+
+	line, err := textLine(v)
+	if err != nil {
+		return err
+	}
+	if account != "" {
+		line = "[" + account + "] " + line
+	}
+	if _, err := fmt.Fprintln(p.w, line); err != nil {
+		return errors.Wrap(err, "write text line")
+	}
+	return nil
+}
+
+func addAccountField(b []byte, account string) ([]byte, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return nil, errors.Wrap(err, "decode json line")
+	}
+	if obj == nil {
+		return nil, errors.New("json line must be an object")
+	}
+	accountJSON, err := json.Marshal(account)
+	if err != nil {
+		return nil, errors.Wrap(err, "encode account")
+	}
+	obj["account"] = accountJSON
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return nil, errors.Wrap(err, "encode json line")
+	}
+	return out, nil
+}
+
+func textLine(v any) (string, error) {
+	var buf bytes.Buffer
+	if tm, ok := v.(TextMarshaler); ok {
+		if err := tm.MarshalText(&buf); err != nil {
+			return "", err
+		}
+		return strings.TrimRight(buf.String(), "\n"), nil
+	}
+	return fmt.Sprint(v), nil
 }

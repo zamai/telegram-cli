@@ -62,15 +62,15 @@ func editBanned(ctx context.Context, api *tg.Client, ch tg.InputChannelClass, pa
 
 // channelAndUser resolves a channel peer and a user peer.
 func (a *app) channelAndUser(ctx context.Context, api *tg.Client, chArg, userArg string) (tg.InputChannelClass, tg.InputUserClass, error) {
-	m, err := a.manager(api)
+	targets, err := a.cachedPeers(api)
 	if err != nil {
 		return nil, nil, err
 	}
-	ch, err := asInputChannel(ctx, m, chArg)
+	ch, err := targets.Channel(ctx, chArg)
 	if err != nil {
 		return nil, nil, err
 	}
-	users, err := resolveUsers(ctx, m, []string{userArg})
+	users, err := targets.Users(ctx, []string{userArg})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,15 +134,15 @@ func (a *app) banUnbanCmd(use, short string, ban bool) *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				ch, err := asInputChannel(ctx, m, args[0])
+				ch, err := targets.Channel(ctx, args[0])
 				if err != nil {
 					return err
 				}
-				p, err := m.Resolve(ctx, args[1])
+				p, err := targets.Resolve(ctx, args[1])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[1])
 				}
@@ -181,11 +181,11 @@ func (a *app) newSlowModeCmd() *cobra.Command {
 				return errors.Wrap(err, "seconds must be an integer")
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				ch, err := asInputChannel(ctx, m, args[0])
+				ch, err := targets.Channel(ctx, args[0])
 				if err != nil {
 					return err
 				}

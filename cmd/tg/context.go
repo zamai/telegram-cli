@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"sort"
 	"strconv"
 
 	"github.com/go-faster/errors"
@@ -22,15 +21,12 @@ func messageContext(ctx context.Context, api *tg.Client, peer tg.InputPeerClass,
 	if err != nil {
 		return historyResult{}, errors.Wrap(err, "messages.getHistory")
 	}
-	msgs, ent, err := messagesFrom(res)
+	timeline := newMessageTimeline()
+	out, err := timeline.FromResponse(res)
 	if err != nil {
 		return historyResult{}, err
 	}
-	out := messagesToHistory(msgs, ent)
-	sort.Slice(out.Messages, func(i, j int) bool {
-		return out.Messages[i].ID < out.Messages[j].ID
-	})
-	return out, nil
+	return timeline.Chronological(out), nil
 }
 
 func (a *app) newContextCmd() *cobra.Command {
@@ -51,11 +47,11 @@ func (a *app) newContextCmd() *cobra.Command {
 				return errors.Wrap(err, "message-id must be an integer")
 			}
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

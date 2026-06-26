@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-faster/errors"
-
 	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/tg"
@@ -142,15 +140,6 @@ func entitiesOf(users []tg.UserClass, chats []tg.ChatClass) peer.Entities {
 		tg.ChatClassArray(chats).ChatToMap(),
 		tg.ChatClassArray(chats).ChannelToMap(),
 	)
-}
-
-// messagesFrom extracts the messages and entities from a messages RPC response.
-func messagesFrom(res tg.MessagesMessagesClass) ([]tg.MessageClass, peer.Entities, error) {
-	mod, ok := res.AsModified()
-	if !ok {
-		return nil, peer.Entities{}, errors.Errorf("unexpected messages type %T", res)
-	}
-	return mod.GetMessages(), entitiesOf(mod.GetUsers(), mod.GetChats()), nil
 }
 
 // buildMessageItem maps a raw message to a messageItem using entities for names.

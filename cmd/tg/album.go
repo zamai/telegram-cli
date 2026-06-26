@@ -80,12 +80,12 @@ attached to the first item.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
 				upld := uploader.NewUploader(api).WithPartSize(uploader.MaximumPartSize)
-				sender, m, err := a.sender(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				sender = sender.WithUploader(upld)
-				bf, err := builderFor(ctx, m, sender, peer)
+				targets = targets.WithSender(targets.Sender().WithUploader(upld))
+				bf, err := targets.Builder(ctx, peer)
 				if err != nil {
 					return err
 				}

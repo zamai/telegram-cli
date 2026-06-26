@@ -8,7 +8,6 @@ import (
 	"github.com/go-faster/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/gotd/td/telegram/peers"
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 )
@@ -22,24 +21,16 @@ func (a *app) newSetTitleCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				p, err := m.Resolve(ctx, args[0])
+				p, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
-				switch v := p.(type) {
-				case peers.Channel:
-					_, err = api.ChannelsEditTitle(ctx, &tg.ChannelsEditTitleRequest{Channel: v.InputChannel(), Title: args[1]})
-				case peers.Chat:
-					_, err = api.MessagesEditChatTitle(ctx, &tg.MessagesEditChatTitleRequest{ChatID: v.ID(), Title: args[1]})
-				default:
-					return errors.New("peer is not a group or channel")
-				}
-				if err != nil {
-					return errors.Wrap(err, "edit title")
+				if err := newChatAdmin(api).SetTitle(ctx, p, args[1]); err != nil {
+					return err
 				}
 				return a.printer.Emit(okResult{OK: true})
 			})
@@ -57,11 +48,11 @@ func (a *app) newSetAboutCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}
@@ -93,24 +84,16 @@ func (a *app) newSetPhotoCmd() *cobra.Command {
 				}
 				photo := &tg.InputChatUploadedPhoto{File: file}
 
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				p, err := m.Resolve(ctx, args[0])
+				p, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
-				switch v := p.(type) {
-				case peers.Channel:
-					_, err = api.ChannelsEditPhoto(ctx, &tg.ChannelsEditPhotoRequest{Channel: v.InputChannel(), Photo: photo})
-				case peers.Chat:
-					_, err = api.MessagesEditChatPhoto(ctx, &tg.MessagesEditChatPhotoRequest{ChatID: v.ID(), Photo: photo})
-				default:
-					return errors.New("peer is not a group or channel")
-				}
-				if err != nil {
-					return errors.Wrap(err, "edit photo")
+				if err := newChatAdmin(api).SetPhoto(ctx, p, photo); err != nil {
+					return err
 				}
 				return a.printer.Emit(okResult{OK: true})
 			})

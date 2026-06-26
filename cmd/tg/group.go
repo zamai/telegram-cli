@@ -59,11 +59,11 @@ func (a *app) newCreateGroupCmd() *cobra.Command {
   tg create-group "Just me"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				users, err := resolveUsers(ctx, m, args[1:])
+				users, err := targets.Users(ctx, args[1:])
 				if err != nil {
 					return err
 				}
@@ -133,39 +133,20 @@ func (a *app) newInviteCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				users, err := resolveUsers(ctx, m, args[1:])
+				users, err := targets.Users(ctx, args[1:])
 				if err != nil {
 					return err
 				}
-				peerObj, err := m.Resolve(ctx, args[0])
+				peerObj, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
-
-				switch v := peerObj.(type) {
-				case peers.Channel:
-					_, err = api.ChannelsInviteToChannel(ctx, &tg.ChannelsInviteToChannelRequest{
-						Channel: v.InputChannel(),
-						Users:   users,
-					})
-				case peers.Chat:
-					for _, u := range users {
-						if _, err = api.MessagesAddChatUser(ctx, &tg.MessagesAddChatUserRequest{
-							ChatID: v.ID(),
-							UserID: u,
-						}); err != nil {
-							break
-						}
-					}
-				default:
-					return errors.New("peer is not a group or channel")
-				}
-				if err != nil {
-					return errors.Wrap(err, "invite")
+				if err := newChatAdmin(api).Invite(ctx, peerObj, users); err != nil {
+					return err
 				}
 				return a.printer.Emit(okResult{OK: true})
 			})
@@ -183,27 +164,16 @@ func (a *app) newLeaveCmd() *cobra.Command {
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peerObj, err := m.Resolve(ctx, args[0])
+				peerObj, err := targets.Resolve(ctx, args[0])
 				if err != nil {
 					return errors.Wrapf(err, "resolve %q", args[0])
 				}
-				switch v := peerObj.(type) {
-				case peers.Channel:
-					_, err = api.ChannelsLeaveChannel(ctx, v.InputChannel())
-				case peers.Chat:
-					_, err = api.MessagesDeleteChatUser(ctx, &tg.MessagesDeleteChatUserRequest{
-						ChatID: v.ID(),
-						UserID: &tg.InputUserSelf{},
-					})
-				default:
-					return errors.New("peer is not a group or channel")
-				}
-				if err != nil {
-					return errors.Wrap(err, "leave")
+				if err := newChatAdmin(api).Leave(ctx, peerObj); err != nil {
+					return err
 				}
 				return a.printer.Emit(okResult{OK: true})
 			})

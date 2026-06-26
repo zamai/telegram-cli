@@ -62,6 +62,7 @@ func listHistory(ctx context.Context, api *tg.Client, peer tg.InputPeerClass, li
 	iter := query.Messages(api).GetHistory(peer).Iter()
 
 	var res historyResult
+	timeline := newMessageTimeline()
 	for iter.Next(ctx) {
 		if len(res.Messages) >= limit {
 			break
@@ -71,20 +72,21 @@ func listHistory(ctx context.Context, api *tg.Client, peer tg.InputPeerClass, li
 		if !ok {
 			continue
 		}
-		if res.Peer.Type == "" {
-			res.Peer = describePeer(msg.PeerID, elem.Entities)
+		item := timeline.FromMessages([]tg.MessageClass{msg}, elem.Entities)
+		if len(item.Messages) == 0 {
+			continue
 		}
-		res.Messages = append(res.Messages, buildMessageItem(msg, elem.Entities))
+		if res.Peer.Type == "" {
+			res.Peer = item.Peer
+		}
+		res.Messages = append(res.Messages, item.Messages...)
 	}
 	if err := iter.Err(); err != nil {
 		return historyResult{}, errors.Wrap(err, "iterate history")
 	}
 
 	// API returns newest-first; present chronologically.
-	for i, j := 0, len(res.Messages)-1; i < j; i, j = i+1, j-1 {
-		res.Messages[i], res.Messages[j] = res.Messages[j], res.Messages[i]
-	}
-	return res, nil
+	return timeline.Chronological(res), nil
 }
 
 func (a *app) newHistoryCmd() *cobra.Command {
@@ -104,11 +106,11 @@ oldest-first). The peer is me/self, @username, phone, or a t.me link.`,
 		ValidArgsFunction: peerArgCompletion,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				m, err := a.manager(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				peer, err := resolvePeer(ctx, m, args[0])
+				peer, err := targets.Input(ctx, args[0])
 				if err != nil {
 					return err
 				}

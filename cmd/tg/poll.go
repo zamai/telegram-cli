@@ -48,11 +48,11 @@ poll is single-choice and anonymous.`,
 			}
 
 			return a.run(cmd.Context(), runParams{auth: authUser}, func(ctx context.Context, api *tg.Client) error {
-				sender, m, err := a.sender(api)
+				targets, err := a.cachedPeers(api)
 				if err != nil {
 					return err
 				}
-				bf, err := builderFor(ctx, m, sender, peer)
+				bf, err := targets.Builder(ctx, peer)
 				if err != nil {
 					return err
 				}

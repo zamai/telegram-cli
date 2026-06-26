@@ -29,6 +29,48 @@ type peerManager struct {
 	store *peercache.Storage
 }
 
+// cachedPeers is the command-facing peer module. It keeps the "me"/"self",
+// "id:", cache, and message sender adapter knowledge behind one interface.
+type cachedPeers struct {
+	manager *peerManager
+	sender  *message.Sender
+}
+
+func newCachedPeers(api *tg.Client, m *peerManager) *cachedPeers {
+	return &cachedPeers{
+		manager: m,
+		sender:  message.NewSender(api).WithResolver(peerResolver{pm: m}),
+	}
+}
+
+func (p *cachedPeers) Input(ctx context.Context, arg string) (tg.InputPeerClass, error) {
+	return resolvePeer(ctx, p.manager, arg)
+}
+
+func (p *cachedPeers) Builder(ctx context.Context, arg string) (*message.RequestBuilder, error) {
+	return builderFor(ctx, p.manager, p.sender, arg)
+}
+
+func (p *cachedPeers) Resolve(ctx context.Context, arg string) (peers.Peer, error) {
+	return resolvePeerArg(ctx, p.manager, arg)
+}
+
+func (p *cachedPeers) Users(ctx context.Context, args []string) ([]tg.InputUserClass, error) {
+	return resolveUsers(ctx, p.manager, args)
+}
+
+func (p *cachedPeers) Channel(ctx context.Context, arg string) (tg.InputChannelClass, error) {
+	return asInputChannel(ctx, p.manager, arg)
+}
+
+func (p *cachedPeers) Sender() *message.Sender {
+	return p.sender
+}
+
+func (p *cachedPeers) WithSender(sender *message.Sender) *cachedPeers {
+	return &cachedPeers{manager: p.manager, sender: sender}
+}
+
 // resolveID resolves an "id:<n>" argument to a cached peer. The kind
 // (user/chat/channel) comes from the peer cache; an unseen id is an error that
 // points the user at `tg chats list`.
@@ -120,17 +162,12 @@ func (a *app) managerFor(api *tg.Client, st *accountState) (*peerManager, error)
 	}, nil
 }
 
-// sender returns a message.Sender that resolves peers through the cached
-// manager, so access-hashes persist across invocations. It also returns the
-// peerManager so builderFor can resolve "id:" peers, which the sender's own
-// resolver cannot (the message package rejects the ":" as an invalid domain
-// before delegating to the resolver).
-func (a *app) sender(api *tg.Client) (*message.Sender, *peerManager, error) {
+func (a *app) cachedPeers(api *tg.Client) (*cachedPeers, error) {
 	m, err := a.manager(api)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return message.NewSender(api).WithResolver(peerResolver{pm: m}), m, nil
+	return newCachedPeers(api, m), nil
 }
 
 // builderFor returns a request builder targeting peer; the empty string, "me"

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -12,10 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/message/peer"
 	"github.com/gotd/td/tg"
-
-	"github.com/gotd/cli/internal/output"
 )
 
 // watchEvent is one streamed message.
@@ -37,8 +33,7 @@ func (s *messageStream) handle(msg tg.MessageClass, e tg.Entities) {
 	if !ok {
 		return
 	}
-	ent := peer.EntitiesFromUpdate(e)
-	ev := watchEvent{Peer: describePeer(m.PeerID, ent), Message: buildMessageItem(m, ent)}
+	ev := newMessageTimeline().FromUpdate(m, e)
 	if s.filterID != 0 && ev.Peer.ID != s.filterID {
 		return
 	}
@@ -74,33 +69,6 @@ func (a *app) resolveFilterFor(ctx context.Context, api *tg.Client, st *accountS
 		return 0, errors.Wrapf(err, "resolve %q", args[0])
 	}
 	return p.ID(), nil
-}
-
-// emitLine writes one streamed event (JSON line or text line) to stdout. When
-// account is non-empty (multi-account watch) it is included.
-func emitLine(format output.Format, account string, ev watchEvent) {
-	if format == output.JSON {
-		payload := struct {
-			Account string `json:"account,omitempty"`
-			watchEvent
-		}{Account: account, watchEvent: ev}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return
-		}
-		_, _ = fmt.Fprintln(os.Stdout, string(b))
-		return
-	}
-	line := ev.Peer.label()
-	if ev.Message.Text != "" {
-		line += ": " + ev.Message.Text
-	} else if ev.Message.Media != "" {
-		line += ": [" + ev.Message.Media + "]"
-	}
-	if account != "" {
-		line = "[" + account + "] " + line
-	}
-	_, _ = fmt.Fprintln(os.Stdout, line)
 }
 
 func (a *app) newWatchCmd() *cobra.Command {
@@ -159,7 +127,6 @@ func (a *app) watchAll(ctx context.Context, labels, args []string) error {
 // watchWith connects to one account and streams until ctx is done. mu, if set,
 // serializes stdout across concurrent accounts.
 func (a *app) watchWith(ctx context.Context, st *accountState, header string, args []string, mu *sync.Mutex) error {
-	format := a.printer.Format()
 	return a.connectWith(ctx, st, runParams{auth: authUser, updates: true},
 		func(ctx context.Context, client *telegram.Client, d tg.UpdateDispatcher) error {
 			if err := requireAuth(ctx, client); err != nil {
@@ -177,7 +144,7 @@ func (a *app) watchWith(ctx context.Context, st *accountState, header string, ar
 						mu.Lock()
 						defer mu.Unlock()
 					}
-					emitLine(format, header, ev)
+					_ = a.printer.EmitLine(header, ev)
 				},
 			}
 			stream.register(d)
