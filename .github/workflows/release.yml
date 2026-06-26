@@ -1,9 +1,9 @@
-name: goreleaser
+name: Release
 
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
 
 # Least privilege: goreleaser only needs to create the release / upload assets.
 permissions:
