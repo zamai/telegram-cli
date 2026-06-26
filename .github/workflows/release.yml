@@ -25,20 +25,6 @@ jobs:
           # setup-go caches the module and build caches by default (keyed on
           # go.sum), so the manual cache + set-output steps are no longer needed.
 
-      - name: Verify release secrets
-        env:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_HASH: ${{ secrets.APP_HASH }}
-        run: |
-          missing=
-          [ -n "$APP_ID" ] || missing="$missing APP_ID"
-          [ -n "$APP_HASH" ] || missing="$missing APP_HASH"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing required release secret(s):$missing. Set them with: gh secret set <NAME>"
-            exit 1
-          fi
-          echo "Release credentials present (APP_ID=${#APP_ID} chars, APP_HASH=${#APP_HASH} chars)."
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -47,10 +33,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Built-in app credentials injected into the binaries via -ldflags.
-          # Required: the "Verify release secrets" step above fails the build if
-          # these are not set, so releases never silently ship the public
-          # tdesktop fallback.
+          # Optional built-in app credentials injected into the binaries via
+          # -ldflags when the repository secrets are present. Without them,
+          # users provide credentials with `tg init --app-id --app-hash`.
           APP_ID: ${{ secrets.APP_ID }}
           APP_HASH: ${{ secrets.APP_HASH }}
 
