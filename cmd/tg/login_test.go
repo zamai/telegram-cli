@@ -41,6 +41,28 @@ func TestTermAuthPrompts(t *testing.T) {
 	}
 }
 
+func TestTermAuthPasswordPromptUsesSecretReader(t *testing.T) {
+	var out bytes.Buffer
+	ta := termAuth{
+		in:  bufio.NewReader(strings.NewReader("plain\n")),
+		out: &out,
+		readPass: func() (string, error) {
+			return " secret \n", nil
+		},
+	}
+
+	password, err := ta.Password(context.Background())
+	if err != nil {
+		t.Fatalf("Password() error = %v", err)
+	}
+	if password != "secret" {
+		t.Fatalf("Password() = %q, want %q", password, "secret")
+	}
+	if got := out.String(); got != "2FA password: \n" {
+		t.Fatalf("prompt output = %q", got)
+	}
+}
+
 func TestTermAuthSignUpUnsupported(t *testing.T) {
 	if _, err := (termAuth{}).SignUp(context.Background()); err == nil {
 		t.Error("expected SignUp to be unsupported")

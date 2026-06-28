@@ -113,12 +113,6 @@ func (a *app) selectedLabels() ([]string, error) {
 	return a.runtime().selectedLabels()
 }
 
-// activate resolves and installs the active account state for label. When multi
-// is set, the account label is included in output.
-func (a *app) activate(label string, multi bool) error {
-	return a.runtime().activate(label, multi)
-}
-
 // ensureActive activates a single selected account if none is active yet.
 func (a *app) ensureActive() error {
 	return a.runtime().ensureActive()
@@ -128,7 +122,7 @@ func (a *app) ensureActive() error {
 func skipConfig(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "init", "docs", "completion", "help",
+		case "init", cmdVersion, "docs", "completion", "help",
 			cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
 			return true
 		}
@@ -144,11 +138,6 @@ type runParams struct {
 	// authorized. If nil, user sessions error with errNotAuthorized and bot
 	// sessions authenticate with the configured token.
 	authorize func(ctx context.Context, client *telegram.Client, d tg.UpdateDispatcher) error
-}
-
-// optionsFor builds telegram.Options for a specific account state.
-func (a *app) optionsFor(st *accountState, rp runParams, d tg.UpdateDispatcher) telegram.Options {
-	return a.runtime().optionsFor(st, rp, d)
 }
 
 // connectWith builds a client for the given account state and runs f inside the
@@ -190,13 +179,4 @@ func (a *app) run(
 	f func(ctx context.Context, api *tg.Client) error,
 ) error {
 	return a.runtime().run(ctx, rp, f)
-}
-
-// runOne authorizes and runs f against the active account.
-func (a *app) runOne(
-	ctx context.Context,
-	rp runParams,
-	f func(ctx context.Context, api *tg.Client) error,
-) error {
-	return a.runtime().runOne(ctx, rp, f)
 }

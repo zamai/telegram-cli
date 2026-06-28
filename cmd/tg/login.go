@@ -11,6 +11,7 @@ import (
 	"github.com/go-faster/errors"
 	"github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/auth"
@@ -26,6 +27,7 @@ type termAuth struct {
 	password string
 	in       *bufio.Reader
 	out      io.Writer
+	readPass func() (string, error)
 }
 
 func (t termAuth) prompt(label string) (string, error) {
@@ -39,6 +41,31 @@ func (t termAuth) prompt(label string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
+func (t termAuth) promptSecret(label string) (string, error) {
+	if t.readPass == nil {
+		return t.prompt(label)
+	}
+	if _, err := fmt.Fprint(t.out, label); err != nil {
+		return "", err
+	}
+	line, err := t.readPass()
+	if _, printErr := fmt.Fprintln(t.out); printErr != nil && err == nil {
+		err = printErr
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
+}
+
+func readPasswordFromStdin() (string, error) {
+	line, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		return "", err
+	}
+	return string(line), nil
+}
+
 func (t termAuth) Phone(_ context.Context) (string, error) {
 	if t.phone != "" {
 		return t.phone, nil
@@ -50,7 +77,7 @@ func (t termAuth) Password(_ context.Context) (string, error) {
 	if t.password != "" {
 		return t.password, nil
 	}
-	return t.prompt("2FA password: ")
+	return t.promptSecret("2FA password: ")
 }
 
 func (t termAuth) Code(_ context.Context, _ *tg.AuthSentCode) (string, error) {
@@ -72,6 +99,7 @@ func (a *app) loginPhone(ctx context.Context, client *telegram.Client, phone, pa
 		password: password,
 		in:       bufio.NewReader(os.Stdin),
 		out:      os.Stderr,
+		readPass: readPasswordFromStdin,
 	}
 	flow := auth.NewFlow(ua, auth.SendCodeOptions{})
 	if err := flow.Run(ctx, client.Auth()); err != nil {
@@ -102,7 +130,12 @@ func (a *app) loginQR(ctx context.Context, client *telegram.Client, d tg.UpdateD
 
 // complete2FA submits the cloud password, re-prompting once on invalid password.
 func (a *app) complete2FA(ctx context.Context, client *telegram.Client, password string) error {
-	ua := termAuth{password: password, in: bufio.NewReader(os.Stdin), out: os.Stderr}
+	ua := termAuth{
+		password: password,
+		in:       bufio.NewReader(os.Stdin),
+		out:      os.Stderr,
+		readPass: readPasswordFromStdin,
+	}
 	for {
 		pw, err := ua.Password(ctx)
 		if err != nil {
@@ -123,7 +156,7 @@ func (a *app) complete2FA(ctx context.Context, client *telegram.Client, password
 // login. The default account always exists, named accounts must be added with
 // credentials first, and `--account all` is rejected.
 func (a *app) ensureAccount() error {
-	if a.accountFlag == "all" {
+	if a.accountFlag == accountAll {
 		return errors.New("login needs a single --account, not 'all'")
 	}
 	label := a.accountFlag

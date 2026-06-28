@@ -41,6 +41,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Inspect release binary metadata
+        run: |
+          binary="$(find dist -type f -name tg -perm -111 | head -n 1)"
+          test -n "${binary}"
+          go version -m "${binary}"
+
       - name: Upload assets
         uses: actions/upload-artifact@v7.0.1
         with:

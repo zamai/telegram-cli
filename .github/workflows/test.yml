@@ -23,3 +23,15 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+      - name: Build and check version
+        run: |
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build \
+            -ldflags "-X main.buildVersion=${GITHUB_REF_NAME:-dev} -X main.buildCommit=${GITHUB_SHA} -X main.buildDate=${build_date}" \
+            -o /tmp/tg ./cmd/tg
+          /tmp/tg --config /tmp/tg-missing-config.yaml version | tee /tmp/tg-version.txt
+          grep -F "version: ${GITHUB_REF_NAME:-dev}" /tmp/tg-version.txt
+          grep -F "commit: ${GITHUB_SHA}" /tmp/tg-version.txt
+          grep -F "build_date: ${build_date}" /tmp/tg-version.txt
+          /tmp/tg --config /tmp/tg-missing-config.yaml --output json version | grep -F "\"commit\": \"${GITHUB_SHA}\""

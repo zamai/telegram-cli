@@ -18,7 +18,11 @@ const (
 )
 
 // cmdList is the common "list" subcommand verb.
-const cmdList = "list"
+const (
+	accountAll = "all"
+	cmdList    = "list"
+	cmdVersion = "version"
+)
 
 func defaultConfigPath() string {
 	dir, err := os.UserConfigDir()
@@ -80,7 +84,7 @@ below apply to every command.`,
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-			return append(cfg.labels(), "all"), cobra.ShellCompDirectiveNoFileComp
+			return append(cfg.labels(), accountAll), cobra.ShellCompDirectiveNoFileComp
 		})
 	pf.BoolVar(&a.debugInvoker, "debug-invoker", false, "use pretty-printing debug invoker")
 	_ = root.RegisterFlagCompletionFunc("output",
@@ -95,6 +99,7 @@ below apply to every command.`,
 
 	root.AddCommand(
 		newInitCmd(a),
+		a.newVersionCmd(),
 		a.newLoginCmd(),
 		a.newLogoutCmd(),
 		a.newAccountsCmd(),

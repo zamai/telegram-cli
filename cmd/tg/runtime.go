@@ -28,7 +28,7 @@ func (a *app) runtime() telegramRuntime {
 // selectedLabels returns the account labels the command should run against.
 func (r telegramRuntime) selectedLabels() ([]string, error) {
 	a := r.app
-	if a.accountFlag == "all" {
+	if a.accountFlag == accountAll {
 		labels := a.cfg.labels()
 		if len(labels) == 0 {
 			return nil, errors.New("no configured accounts")
